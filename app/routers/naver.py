@@ -15,7 +15,7 @@ load_dotenv()
 
 NAVER_CLIENT_ID = os.getenv("NAVER_CLIENT_ID")
 NAVER_CLIENT_SECRET = os.getenv("NAVER_CLIENT_SECRET")
-redirect_URI = 'http://localhost:8000/naver/callback'
+redirect_URI = os.getenv("NAVER_REDIRECT_URI")
 
 def get_naver_auth_url(state: str='state'):
     return (

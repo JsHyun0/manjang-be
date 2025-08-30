@@ -1,5 +1,7 @@
 # Python 베이스 이미지(슬림)
 FROM python:3.11-slim
+# OS 보안 패치 적용
+RUN apt-get update && apt-get -y upgrade && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
