@@ -64,16 +64,20 @@ def add_participant(debate_id: str, participant: DebateParticipant):
     )
     if existing.data:
         # 이미 있으면 side만 갱신 가능
-        updated = (
+        sb.table("debate_participants") \
+            .update({"side": participant.side}) \
+            .eq("debate_id", debate_id) \
+            .eq("user_id", participant.user_id) \
+            .execute()
+        refreshed = (
             sb.table("debate_participants")
-            .update({"side": participant.side})
+            .select("*")
             .eq("debate_id", debate_id)
             .eq("user_id", participant.user_id)
-            .select("*")
             .single()
             .execute()
         )
-        return updated.data
+        return refreshed.data
 
     resp = (
         sb.table("debate_participants")
@@ -111,14 +115,8 @@ def set_winner(debate_id: str, winner_side: str):
     if winner_side not in ("pro", "con"):
         raise HTTPException(status_code=400, detail="winner_side must be 'pro' or 'con'")
     sb = get_supabase()
-    resp = (
-        sb.table("debates")
-        .update({"winner_side": winner_side})
-        .eq("id", debate_id)
-        .select("*")
-        .single()
-        .execute()
-    )
+    sb.table("debates").update({"winner_side": winner_side}).eq("id", debate_id).execute()
+    resp = sb.table("debates").select("*").eq("id", debate_id).single().execute()
     if resp.data is None:
         raise HTTPException(status_code=404, detail="Debate not found")
     return resp.data

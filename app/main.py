@@ -5,8 +5,10 @@ from app.config import get_allowed_origins
 from app.routers.records import router as records_router
 from app.routers.reservations import router as reservations_router
 from app.routers.debates import router as debates_router
-from app.routers.naver import router as naver_router
 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Manjang Backend", version="0.1.0")
 
@@ -28,5 +30,3 @@ def health_check() -> dict:
 app.include_router(records_router, prefix="/records", tags=["records"])
 app.include_router(reservations_router, prefix="/reservations", tags=["reservations"])
 app.include_router(debates_router, prefix="/debates", tags=["debates"])
-app.include_router(naver_router, prefix="/naver", tags=["naver"])
-

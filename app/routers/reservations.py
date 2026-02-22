@@ -1,11 +1,16 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query
 
 from app.db import get_supabase
-from app.models import Reservation, ReservationCreate, ReservationCreateResponse
+from app.models import (
+    Reservation,
+    ReservationCreate,
+    ReservationCreateResponse,
+    ReservationUpdate,
+)
 
 
 router = APIRouter()
@@ -29,6 +34,45 @@ def list_reservations(
     if end is not None:
         query = query.lte("starts_at", end.isoformat())
     resp = query.order("starts_at", desc=False).execute()
+    return resp.data or []
+
+
+@router.get("/month", response_model=List[Reservation])
+def list_reservations_around_month(date_eq: date = Query(alias="date")):
+    sb = get_supabase()
+    # prev month start (1st day 00:00:00Z) to next month end (last day 23:59:59Z)
+    # Compute UTC boundaries
+    year = date_eq.year
+    month = date_eq.month
+
+    # prev month
+    if month == 1:
+        prev_year, prev_month = year - 1, 12
+    else:
+        prev_year, prev_month = year, month - 1
+
+    # next month
+    if month == 12:
+        next_year, next_month = year + 1, 1
+    else:
+        next_year, next_month = year, month + 1
+
+    prev_start = datetime(prev_year, prev_month, 1, 0, 0, 0, tzinfo=timezone.utc)
+    # end boundary is first day of month after next, 00:00Z (use lt on starts_at)
+    if next_month == 12:
+        after_next_year, after_next_month = next_year + 1, 1
+    else:
+        after_next_year, after_next_month = next_year, next_month + 1
+    end_exclusive = datetime(after_next_year, after_next_month, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    query = (
+        sb.table("reservations")
+        .select("*")
+        .gte("starts_at", prev_start.isoformat())
+        .lt("starts_at", end_exclusive.isoformat())
+        .order("starts_at", desc=False)
+    )
+    resp = query.execute()
     return resp.data or []
 
 
@@ -124,9 +168,38 @@ def create_reservation(payload: ReservationCreate):
 @router.delete("/{reservation_id}")
 def cancel_reservation(reservation_id: str):
     sb = get_supabase()
-    resp = sb.table("reservations").delete().eq("id", reservation_id).execute()
-    if resp.data is None:
+    # Supabase python client does not support select() after delete(); check existence first
+    exists = (
+        sb.table("reservations").select("id").eq("id", reservation_id).limit(1).execute()
+    )
+    if not exists.data:
         raise HTTPException(status_code=404, detail="Reservation not found")
-    return {"ok": True}
+    sb.table("reservations").delete().eq("id", reservation_id).execute()
+    return {"ok": True, "id": reservation_id}
+
+
+@router.patch("/{reservation_id}", response_model=Reservation)
+def update_reservation(reservation_id: str, payload: ReservationUpdate):
+    sb = get_supabase()
+    update_dict = payload.model_dump(exclude_none=True)
+    if not update_dict:
+        # 아무 것도 변경하지 않음
+        row = (
+            sb.table("reservations").select("*").eq("id", reservation_id).limit(1).execute()
+        )
+        if not row.data:
+            raise HTTPException(status_code=404, detail="Reservation not found")
+        return row.data[0]
+    resp = (
+        sb.table("reservations")
+        .update(update_dict)
+        .eq("id", reservation_id)
+        .execute()
+    )
+    # supabase-py 2.x는 update 후 select 체이닝을 지원하지 않으므로, 별도 재조회
+    row = sb.table("reservations").select("*").eq("id", reservation_id).limit(1).execute()
+    if not row.data:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    return row.data[0]
 
 

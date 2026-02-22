@@ -57,14 +57,8 @@ def create_record(payload: DebateRecordCreate):
 @router.put("/{record_id}", response_model=DebateRecord)
 def update_record(record_id: str, payload: DebateRecordCreate):
     sb = get_supabase()
-    resp = (
-        sb.table("records")
-        .update(payload.model_dump())
-        .eq("id", record_id)
-        .select("*")
-        .single()
-        .execute()
-    )
+    sb.table("records").update(payload.model_dump()).eq("id", record_id).execute()
+    resp = sb.table("records").select("*").eq("id", record_id).single().execute()
     if resp.data is None:
         raise HTTPException(status_code=404, detail="Record not found")
     return resp.data

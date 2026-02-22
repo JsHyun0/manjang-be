@@ -1,19 +1,34 @@
-from functools import lru_cache
-
 from supabase import create_client, Client
 
 from dotenv import load_dotenv
 import os
+import time
 from typing import Any, Dict, List, Optional
 from datetime import datetime
 
+from app.config import SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, require_env
+
 load_dotenv()
 
-@lru_cache(maxsize=1)
-def get_supabase() -> Client:
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+# TTL 기반 싱글턴 캐시: 장기 HTTP/2 세션 이슈 완화 + 성능 유지
+_SB_CLIENT: Optional[Client] = None
+_SB_CREATED_AT: float = 0.0
+_TTL_SECONDS: int = int(os.getenv("SUPABASE_CLIENT_TTL_SECONDS", "300"))  # 기본 5분
+
+
+def _create_client() -> Client:
+    url = SUPABASE_URL or require_env("SUPABASE_URL")
+    key = SUPABASE_SERVICE_ROLE_KEY or require_env("SUPABASE_SERVICE_ROLE_KEY")
     return create_client(url, key)
+
+
+def get_supabase() -> Client:
+    global _SB_CLIENT, _SB_CREATED_AT
+    now = time.time()
+    if _SB_CLIENT is None or (now - _SB_CREATED_AT) > _TTL_SECONDS:
+        _SB_CLIENT = _create_client()
+        _SB_CREATED_AT = now
+    return _SB_CLIENT
 
 
 
@@ -98,13 +113,7 @@ def add_participant_to_debate(debate_id: str, participant_name: str) -> Optional
     participants: List[str] = current.data[0].get("participants", []) or []
     if participant_name not in participants:
         participants.append(participant_name)
-    updated = (
-        client.table("debates")
-        .update({"participants": participants})
-        .eq("id", debate_id)
-        .select("*")
-        .limit(1)
-        .execute()
-    )
-    return updated.data[0] if updated.data else None
+    client.table("debates").update({"participants": participants}).eq("id", debate_id).execute()
+    refreshed = client.table("debates").select("*").eq("id", debate_id).limit(1).execute()
+    return refreshed.data[0] if refreshed.data else None
 

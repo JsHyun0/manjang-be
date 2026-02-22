@@ -56,6 +56,12 @@ class ReservationCreateResponse(BaseModel):
     warn_opponent_booked: bool = False
 
 
+# 부분 수정을 위한 모델
+class ReservationUpdate(BaseModel):
+    reserved_by_name: Optional[str] = None
+    title: Optional[str] = None
+
+
 # -----------------------------
 # Legacy Records (for /records router compatibility)
 # -----------------------------
