@@ -27,7 +27,8 @@ class Debate(DebateBase):
 class DebateParticipant(BaseModel):
     id: Optional[int] = None
     debate_id: str
-    user_id: str
+    user_id: Optional[str] = None
+    participant_name: Optional[str] = None
     side: Literal["pro", "con"]
 
 
@@ -82,5 +83,4 @@ class DebateRecordCreate(DebateRecordBase):
 
 class DebateRecord(DebateRecordBase):
     id: str
-
 

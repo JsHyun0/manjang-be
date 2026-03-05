@@ -52,38 +52,47 @@ def get_debate(debate_id: str):
 def add_participant(debate_id: str, participant: DebateParticipant):
     if participant.debate_id != debate_id:
         raise HTTPException(status_code=400, detail="debate_id mismatch")
+
+    if not participant.user_id and not (participant.participant_name or "").strip():
+        raise HTTPException(status_code=400, detail="user_id 또는 participant_name 중 하나는 필요합니다.")
+
     sb = get_supabase()
-    # unique(debate_id,user_id) 보장
-    existing = (
-        sb.table("debate_participants")
-        .select("id")
-        .eq("debate_id", debate_id)
-        .eq("user_id", participant.user_id)
-        .limit(1)
-        .execute()
-    )
-    if existing.data:
-        # 이미 있으면 side만 갱신 가능
-        sb.table("debate_participants") \
-            .update({"side": participant.side}) \
-            .eq("debate_id", debate_id) \
-            .eq("user_id", participant.user_id) \
-            .execute()
-        refreshed = (
+
+    if participant.user_id:
+        # unique(debate_id,user_id) 보장
+        existing = (
             sb.table("debate_participants")
-            .select("*")
+            .select("id")
             .eq("debate_id", debate_id)
             .eq("user_id", participant.user_id)
-            .single()
+            .limit(1)
             .execute()
         )
-        return refreshed.data
+        if existing.data:
+            sb.table("debate_participants") \
+                .update({
+                    "side": participant.side,
+                    "participant_name": (participant.participant_name or "").strip(),
+                }) \
+                .eq("debate_id", debate_id) \
+                .eq("user_id", participant.user_id) \
+                .execute()
+            refreshed = (
+                sb.table("debate_participants")
+                .select("*")
+                .eq("debate_id", debate_id)
+                .eq("user_id", participant.user_id)
+                .single()
+                .execute()
+            )
+            return refreshed.data
 
     resp = (
         sb.table("debate_participants")
         .insert({
             "debate_id": debate_id,
             "user_id": participant.user_id,
+            "participant_name": (participant.participant_name or "").strip(),
             "side": participant.side,
         })
         .select("*")
@@ -120,5 +129,4 @@ def set_winner(debate_id: str, winner_side: str):
     if resp.data is None:
         raise HTTPException(status_code=404, detail="Debate not found")
     return resp.data
-
 

@@ -35,13 +35,21 @@ def get_supabase() -> Client:
 # -----------------------------
 # Users - prototype helpers
 # -----------------------------
-def create_user(email: str, name: Optional[str] = None, sid: Optional[str] = None) -> Dict[str, Any]:
+def create_user(
+    user_id: str,
+    email: str,
+    name: str,
+    student_id: str,
+    major: str,
+) -> Dict[str, Any]:
     client = get_supabase()
-    payload: Dict[str, Any] = {"email": email}
-    if name is not None:
-        payload["name"] = name
-    if sid is not None:
-        payload["sid"] = sid
+    payload: Dict[str, Any] = {
+        "id": user_id,
+        "email": email,
+        "name": name,
+        "student_id": student_id,
+        "major": major,
+    }
     response = client.table("users").insert(payload).execute()
     return response.data[0] if response.data else {}
 
@@ -116,4 +124,3 @@ def add_participant_to_debate(debate_id: str, participant_name: str) -> Optional
     client.table("debates").update({"participants": participants}).eq("id", debate_id).execute()
     refreshed = client.table("debates").select("*").eq("id", debate_id).limit(1).execute()
     return refreshed.data[0] if refreshed.data else None
-
