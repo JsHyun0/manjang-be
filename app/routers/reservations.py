@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
@@ -14,25 +14,30 @@ from app.models import (
 
 
 router = APIRouter()
+RESERVATION_SELECT_COLUMNS = "id,reserved_by,reserved_by_name,title,starts_at,ends_at,debate_id"
 
 
 @router.get("", response_model=List[Reservation])
 def list_reservations(
-    start: Optional[datetime] = Query(default=None),
-    end: Optional[datetime] = Query(default=None),
+    start: Optional[date] = Query(default=None),
+    end: Optional[date] = Query(default=None),
     date_eq: Optional[date] = Query(default=None, alias="date"),
 ):
     sb = get_supabase()
-    query = sb.table("reservations").select("*")
+    query = sb.table("reservations").select(RESERVATION_SELECT_COLUMNS)
     if date_eq is not None:
-        # 하루 단위 범위로 변환
-        day_start = f"{date_eq.isoformat()}T00:00:00Z"
-        day_end = f"{date_eq.isoformat()}T23:59:59Z"
-        query = query.gte("starts_at", day_start).lte("ends_at", day_end)
+        start = date_eq
+        end = date_eq + timedelta(days=1)
+
     if start is not None:
-        query = query.gte("ends_at", start.isoformat())
+        start_at = f"{start.isoformat()}T00:00:00Z"
+        query = query.gte("starts_at", start_at)
+
     if end is not None:
-        query = query.lte("starts_at", end.isoformat())
+        # end는 exclusive 경계값이다.
+        end_exclusive = f"{end.isoformat()}T00:00:00Z"
+        query = query.lt("starts_at", end_exclusive)
+
     resp = query.order("starts_at", desc=False).execute()
     return resp.data or []
 
@@ -67,7 +72,7 @@ def list_reservations_around_month(date_eq: date = Query(alias="date")):
 
     query = (
         sb.table("reservations")
-        .select("*")
+        .select(RESERVATION_SELECT_COLUMNS)
         .gte("starts_at", prev_start.isoformat())
         .lt("starts_at", end_exclusive.isoformat())
         .order("starts_at", desc=False)
@@ -201,5 +206,4 @@ def update_reservation(reservation_id: str, payload: ReservationUpdate):
     if not row.data:
         raise HTTPException(status_code=404, detail="Reservation not found")
     return row.data[0]
-
 
