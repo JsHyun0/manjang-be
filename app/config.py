@@ -33,6 +33,7 @@ def get_env(name: str, default: Optional[str] = None) -> Optional[str]:
 
 SUPABASE_URL: Optional[str] = get_env("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY: Optional[str] = get_env("SUPABASE_SERVICE_ROLE_KEY")
+SUPABASE_JWT_SECRET: Optional[str] = get_env("SUPABASE_JWT_SECRET")
 
 
 def get_allowed_origins() -> List[str]:
@@ -42,7 +43,7 @@ def get_allowed_origins() -> List[str]:
         "https://manjang.vercel.app",
         "https://manjang-vue.vercel.app",
     ]
-    default_dev = ["http://localhost:5173"]
+    default_dev = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # 1) 미설정: 안전한 기본값 반환
     if raw is None or not raw.strip():

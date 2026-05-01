@@ -42,6 +42,7 @@ class ReservationBase(BaseModel):
     starts_at: datetime
     ends_at: datetime
     debate_id: Optional[UUID] = None
+    allow_simultaneous: bool = False
 
 
 class ReservationCreate(ReservationBase):

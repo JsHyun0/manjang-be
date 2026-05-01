@@ -1,7 +1,8 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import require_admin
 from app.db import get_supabase
 from app.models import DebateRecord, DebateRecordCreate
 
@@ -21,15 +22,12 @@ def list_records(
     if category:
         query = query.eq("category", category)
 
-    # 검색: 제목, 요약, 참가자 이름
-    # Supabase에서 or 검색을 위해 filter string 사용
     if search:
         like = f"%{search}%"
         query = query.or_(
             f"title.ilike.{like},summary.ilike.{like},participantNames.cs.{{{search}}}"
         )
 
-    # 정렬
     if sort == "date-asc":
         query = query.order("date", desc=False)
     elif sort == "participants-desc":
@@ -45,9 +43,8 @@ def list_records(
 
 
 @router.post("", response_model=DebateRecord)
-def create_record(payload: DebateRecordCreate):
+def create_record(payload: DebateRecordCreate, _: str = Depends(require_admin)):
     sb = get_supabase()
-    # id는 DB에서 생성(UUID)한다고 가정
     resp = sb.table("records").insert(payload.model_dump()).select("*").single().execute()
     if resp.data is None:
         raise HTTPException(status_code=500, detail="Failed to create record")
@@ -55,7 +52,7 @@ def create_record(payload: DebateRecordCreate):
 
 
 @router.put("/{record_id}", response_model=DebateRecord)
-def update_record(record_id: str, payload: DebateRecordCreate):
+def update_record(record_id: str, payload: DebateRecordCreate, _: str = Depends(require_admin)):
     sb = get_supabase()
     sb.table("records").update(payload.model_dump()).eq("id", record_id).execute()
     resp = sb.table("records").select("*").eq("id", record_id).single().execute()
@@ -65,11 +62,9 @@ def update_record(record_id: str, payload: DebateRecordCreate):
 
 
 @router.delete("/{record_id}")
-def delete_record(record_id: str):
+def delete_record(record_id: str, _: str = Depends(require_admin)):
     sb = get_supabase()
     resp = sb.table("records").delete().eq("id", record_id).execute()
     if resp.data is None:
         raise HTTPException(status_code=404, detail="Record not found")
     return {"ok": True}
-
-

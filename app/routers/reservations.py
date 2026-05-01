@@ -2,8 +2,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import is_admin_user, require_auth
 from app.db import get_supabase
 from app.models import (
     Reservation,
@@ -14,7 +15,7 @@ from app.models import (
 
 
 router = APIRouter()
-RESERVATION_SELECT_COLUMNS = "id,reserved_by,reserved_by_name,title,starts_at,ends_at,debate_id"
+RESERVATION_SELECT_COLUMNS = "id,reserved_by,reserved_by_name,title,starts_at,ends_at,debate_id,allow_simultaneous"
 
 
 @router.get("", response_model=List[Reservation])
@@ -34,7 +35,6 @@ def list_reservations(
         query = query.gte("starts_at", start_at)
 
     if end is not None:
-        # end는 exclusive 경계값이다.
         end_exclusive = f"{end.isoformat()}T00:00:00Z"
         query = query.lt("starts_at", end_exclusive)
 
@@ -45,25 +45,20 @@ def list_reservations(
 @router.get("/month", response_model=List[Reservation])
 def list_reservations_around_month(date_eq: date = Query(alias="date")):
     sb = get_supabase()
-    # prev month start (1st day 00:00:00Z) to next month end (last day 23:59:59Z)
-    # Compute UTC boundaries
     year = date_eq.year
     month = date_eq.month
 
-    # prev month
     if month == 1:
         prev_year, prev_month = year - 1, 12
     else:
         prev_year, prev_month = year, month - 1
 
-    # next month
     if month == 12:
         next_year, next_month = year + 1, 1
     else:
         next_year, next_month = year, month + 1
 
     prev_start = datetime(prev_year, prev_month, 1, 0, 0, 0, tzinfo=timezone.utc)
-    # end boundary is first day of month after next, 00:00Z (use lt on starts_at)
     if next_month == 12:
         after_next_year, after_next_month = next_year + 1, 1
     else:
@@ -94,9 +89,7 @@ def _check_overlap(sb, starts_at: datetime, ends_at: datetime) -> bool:
 
 
 def _warn_opponent_same_debate(sb, debate_id: UUID, reserved_by: Optional[UUID], starts_at: datetime, ends_at: datetime) -> bool:
-    # 본인 side 조회
     if not reserved_by:
-        # 익명 예약의 경우 상대 경고 로직을 건너뜀
         return False
 
     my_side_resp = (
@@ -108,12 +101,10 @@ def _warn_opponent_same_debate(sb, debate_id: UUID, reserved_by: Optional[UUID],
         .execute()
     )
     if not my_side_resp.data:
-        # 토론 참가자가 아니면 유효성 위반
         raise HTTPException(status_code=400, detail="해당 토론 참가자만 선택할 수 있습니다.")
     my_side = my_side_resp.data["side"]
     opponent_side = "con" if my_side == "pro" else "pro"
 
-    # 같은 시간대 동일 토론의 상대팀 예약 존재 여부
     other_resps = (
         sb.table("reservations")
         .select("id, reserved_by")
@@ -125,7 +116,6 @@ def _warn_opponent_same_debate(sb, debate_id: UUID, reserved_by: Optional[UUID],
     if not other_resps.data:
         return False
 
-    # 상대팀인지 확인
     user_ids = [row["reserved_by"] for row in other_resps.data]
     if not user_ids:
         return False
@@ -144,12 +134,37 @@ def _warn_opponent_same_debate(sb, debate_id: UUID, reserved_by: Optional[UUID],
 
 
 @router.post("", response_model=ReservationCreateResponse)
-def create_reservation(payload: ReservationCreate):
+def create_reservation(payload: ReservationCreate, user_id: str = Depends(require_auth)):
     sb = get_supabase()
 
-    # 시간 겹침 검사 (단일 방)
-    # if _check_overlap(sb, payload.starts_at, payload.ends_at):
-        # raise HTTPException(status_code=409, detail="이미 해당 시간대에 예약이 있습니다.")
+    # 본인 명의 예약인지 확인 (admin은 타인 대리 예약 가능)
+    if payload.reserved_by is not None and str(payload.reserved_by) != user_id:
+        if not is_admin_user(user_id):
+            raise HTTPException(status_code=403, detail="본인 명의로만 예약할 수 있습니다.")
+
+    # reserved_by 미설정 시 인증된 사용자로 자동 설정
+    if payload.reserved_by is None:
+        payload = payload.model_copy(update={"reserved_by": UUID(user_id)})
+
+    # 동시 예약 허용 검사 (최대 2팀)
+    overlap_resp = (
+        sb.table("reservations")
+        .select("id, allow_simultaneous")
+        .lt("starts_at", payload.ends_at.isoformat())
+        .gt("ends_at", payload.starts_at.isoformat())
+        .execute()
+    )
+    existing = overlap_resp.data or []
+
+    if len(existing) >= 2:
+        raise HTTPException(status_code=409, detail="이미 해당 시간대에 최대 예약 인원(2팀)이 차 있습니다.")
+
+    if len(existing) == 1:
+        existing_allows = existing[0].get("allow_simultaneous", False)
+        if not existing_allows:
+            raise HTTPException(status_code=409, detail="해당 시간대의 기존 예약이 동시 예약을 허용하지 않습니다.")
+        if not payload.allow_simultaneous:
+            raise HTTPException(status_code=409, detail="이미 예약된 시간대에는 동시 예약 허용이 필요합니다.")
 
     warn_opponent = False
     if payload.debate_id:
@@ -161,7 +176,6 @@ def create_reservation(payload: ReservationCreate):
             payload.ends_at,
         )
 
-    # null/None 값 제외 + datetime 등을 JSON 직렬화 가능한 값으로 변환
     payload_dict = payload.model_dump(mode="json", exclude_none=True)
     resp = sb.table("reservations").insert(payload_dict).execute()
     if not resp.data:
@@ -171,39 +185,43 @@ def create_reservation(payload: ReservationCreate):
 
 
 @router.delete("/{reservation_id}")
-def cancel_reservation(reservation_id: str):
+def cancel_reservation(reservation_id: str, user_id: str = Depends(require_auth)):
     sb = get_supabase()
-    # Supabase python client does not support select() after delete(); check existence first
     exists = (
-        sb.table("reservations").select("id").eq("id", reservation_id).limit(1).execute()
+        sb.table("reservations").select("id,reserved_by").eq("id", reservation_id).limit(1).execute()
     )
     if not exists.data:
         raise HTTPException(status_code=404, detail="Reservation not found")
+
+    reserved_by = str(exists.data[0].get("reserved_by") or "")
+    if reserved_by != user_id and not is_admin_user(user_id):
+        raise HTTPException(status_code=403, detail="본인의 예약만 취소할 수 있습니다.")
+
     sb.table("reservations").delete().eq("id", reservation_id).execute()
     return {"ok": True, "id": reservation_id}
 
 
 @router.patch("/{reservation_id}", response_model=Reservation)
-def update_reservation(reservation_id: str, payload: ReservationUpdate):
+def update_reservation(reservation_id: str, payload: ReservationUpdate, user_id: str = Depends(require_auth)):
     sb = get_supabase()
+
+    exists = (
+        sb.table("reservations").select("id,reserved_by").eq("id", reservation_id).limit(1).execute()
+    )
+    if not exists.data:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+
+    reserved_by = str(exists.data[0].get("reserved_by") or "")
+    if reserved_by != user_id and not is_admin_user(user_id):
+        raise HTTPException(status_code=403, detail="본인의 예약만 수정할 수 있습니다.")
+
     update_dict = payload.model_dump(exclude_none=True)
     if not update_dict:
-        # 아무 것도 변경하지 않음
-        row = (
-            sb.table("reservations").select("*").eq("id", reservation_id).limit(1).execute()
-        )
-        if not row.data:
-            raise HTTPException(status_code=404, detail="Reservation not found")
-        return row.data[0]
-    resp = (
-        sb.table("reservations")
-        .update(update_dict)
-        .eq("id", reservation_id)
-        .execute()
-    )
-    # supabase-py 2.x는 update 후 select 체이닝을 지원하지 않으므로, 별도 재조회
+        return exists.data[0]
+
+    sb.table("reservations").update(update_dict).eq("id", reservation_id).execute()
+    # supabase-py 2.x는 update 후 select 체이닝을 지원하지 않으므로 별도 재조회
     row = sb.table("reservations").select("*").eq("id", reservation_id).limit(1).execute()
     if not row.data:
         raise HTTPException(status_code=404, detail="Reservation not found")
     return row.data[0]
-

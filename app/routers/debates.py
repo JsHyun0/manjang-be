@@ -1,7 +1,8 @@
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from app.auth import require_admin
 from app.db import get_supabase
 from app.models import Debate, DebateCreate, DebateParticipant
 
@@ -14,7 +15,6 @@ def list_debates(year: Optional[int] = Query(default=None)):
     sb = get_supabase()
     query = sb.table("debates").select("*")
     if year is not None:
-        # Supabase는 SQL 함수 사용 대신 필터로 처리 어려움 → 범위로 대체
         query = (
             query
             .gte("debate_date", f"{year}-01-01")
@@ -25,7 +25,7 @@ def list_debates(year: Optional[int] = Query(default=None)):
 
 
 @router.post("", response_model=Debate)
-def create_debate(payload: DebateCreate):
+def create_debate(payload: DebateCreate, _: str = Depends(require_admin)):
     sb = get_supabase()
     resp = (
         sb.table("debates")
@@ -49,7 +49,7 @@ def get_debate(debate_id: str):
 
 
 @router.post("/{debate_id}/participants", response_model=DebateParticipant)
-def add_participant(debate_id: str, participant: DebateParticipant):
+def add_participant(debate_id: str, participant: DebateParticipant, _: str = Depends(require_admin)):
     if participant.debate_id != debate_id:
         raise HTTPException(status_code=400, detail="debate_id mismatch")
 
@@ -59,7 +59,6 @@ def add_participant(debate_id: str, participant: DebateParticipant):
     sb = get_supabase()
 
     if participant.user_id:
-        # unique(debate_id,user_id) 보장
         existing = (
             sb.table("debate_participants")
             .select("id")
@@ -105,7 +104,7 @@ def add_participant(debate_id: str, participant: DebateParticipant):
 
 
 @router.delete("/{debate_id}/participants/{user_id}")
-def remove_participant(debate_id: str, user_id: str):
+def remove_participant(debate_id: str, user_id: str, _: str = Depends(require_admin)):
     sb = get_supabase()
     resp = (
         sb.table("debate_participants")
@@ -120,7 +119,7 @@ def remove_participant(debate_id: str, user_id: str):
 
 
 @router.post("/{debate_id}/winner")
-def set_winner(debate_id: str, winner_side: str):
+def set_winner(debate_id: str, winner_side: str, _: str = Depends(require_admin)):
     if winner_side not in ("pro", "con"):
         raise HTTPException(status_code=400, detail="winner_side must be 'pro' or 'con'")
     sb = get_supabase()
@@ -129,4 +128,3 @@ def set_winner(debate_id: str, winner_side: str):
     if resp.data is None:
         raise HTTPException(status_code=404, detail="Debate not found")
     return resp.data
-

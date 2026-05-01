@@ -228,6 +228,7 @@ create table if not exists public.reservations (
   starts_at timestamptz not null,
   ends_at timestamptz not null,
   debate_id uuid references public.debates(id) on delete set null,
+  allow_simultaneous boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (ends_at > starts_at)
