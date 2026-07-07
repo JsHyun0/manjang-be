@@ -35,6 +35,11 @@ SUPABASE_URL: Optional[str] = get_env("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY: Optional[str] = get_env("SUPABASE_SERVICE_ROLE_KEY")
 SUPABASE_JWT_SECRET: Optional[str] = get_env("SUPABASE_JWT_SECRET")
 
+# 회원 시트 동기화: 기본 구글 스프레드시트 URL (관리자 요청에서 덮어쓸 수 있음)
+MEMBER_SHEET_URL: Optional[str] = get_env("MEMBER_SHEET_URL")
+# 사전 등록 회원의 가상 이메일 도메인: {학번}@{도메인}
+MEMBER_EMAIL_DOMAIN: str = get_env("MEMBER_EMAIL_DOMAIN", "member.manjang.site")
+
 
 def get_allowed_origins() -> List[str]:
     raw = get_env("ALLOWED_ORIGINS")

@@ -50,6 +50,7 @@ create table if not exists public.users (
   major text not null,
   generation text not null default '',
   role text not null default 'member' check (role in ('member', 'admin')),
+  must_change_password boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

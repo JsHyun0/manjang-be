@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Running the server
 
 ```bash
-conda activate ai
+conda activate be
 pip install -r requirements.txt
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
@@ -28,6 +28,8 @@ Single `app/` package — no sub-packages except `routers/`.
 | `routers/debates.py` | Debates CRUD + participants (`debate_participants` table) + winner setting |
 | `routers/reservations.py` | Room reservations — overlap check helper, opponent-booking warning logic, `/month` bulk query endpoint |
 | `routers/records.py` | Legacy debate records CRUD with Supabase `or_()` full-text search |
+| `routers/members.py` | Member sheet sync (Google Sheet CSV export → uploaded CSV fallback), member list, admin password reset, `/members/me`, `/members/me/debates`, `/members/stats` win-loss aggregation |
+| `routers/account.py` | `/auth/login-lookup` (이름+학번 → 이메일), `/auth/change-password` (admin API로 비밀번호 변경 + `must_change_password` 해제) |
 
 ### Key design notes
 
@@ -41,8 +43,11 @@ Single `app/` package — no sub-packages except `routers/`.
 ```
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
+SUPABASE_JWT_SECRET
 ALLOWED_ORIGINS          # JSON array or CSV; dev + prod origins always appended
 SUPABASE_CLIENT_TTL_SECONDS=300  # optional
+MEMBER_SHEET_URL         # 멤버 명단 구글시트 URL (동기화 기본 소스)
+MEMBER_EMAIL_DOMAIN      # 사전 등록 회원 가상 이메일 도메인 (default: member.manjang.site)
 ```
 
 ## Deployment

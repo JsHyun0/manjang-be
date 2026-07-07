@@ -65,6 +65,69 @@ class ReservationUpdate(BaseModel):
 
 
 # -----------------------------
+# Members (사전 등록 회원 시스템)
+# -----------------------------
+class MemberSyncRequest(BaseModel):
+    sheet_url: Optional[str] = None
+    csv_text: Optional[str] = None
+
+
+class MemberSyncResult(BaseModel):
+    source: Literal["sheet", "csv"]
+    total_rows: int
+    created: int
+    updated: int
+    unchanged: int
+    created_names: List[str] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+
+
+class MemberProfile(BaseModel):
+    id: str
+    email: str
+    name: str
+    student_id: str
+    major: str = ""
+    generation: str = ""
+    role: str = "member"
+    must_change_password: bool = False
+
+
+class MyDebateItem(BaseModel):
+    debate_id: str
+    topic: str
+    date: date
+    debate_type: str = "자유토론"
+    side: Literal["pro", "con"]
+    winner_side: Optional[Literal["pro", "con"]] = None
+    result: Literal["win", "loss", "pending"]
+
+
+class MemberStatsRow(BaseModel):
+    user_id: str
+    name: str
+    generation: str = ""
+    major: str = ""
+    wins: int = 0
+    losses: int = 0
+    total: int = 0
+    win_rate: float = 0.0
+
+
+class LoginLookupRequest(BaseModel):
+    name: str
+    student_id: str
+
+
+class LoginLookupResponse(BaseModel):
+    email: str
+
+
+class PasswordChangeRequest(BaseModel):
+    new_password: str
+
+
+# -----------------------------
 # Legacy Records (for /records router compatibility)
 # -----------------------------
 class DebateRecordBase(BaseModel):
