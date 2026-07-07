@@ -203,8 +203,16 @@ def sync_members(payload: MemberSyncRequest, _: str = Depends(require_admin)):
             user_id = create_resp.user.id if create_resp and create_resp.user else None
             if not user_id:
                 raise RuntimeError("auth 계정 생성 응답에 사용자 ID가 없습니다.")
-            # auth.users 트리거가 public.users를 생성한 직후 플래그만 세팅
-            sb.table("users").update({"must_change_password": True}).eq("id", user_id).execute()
+            # auth.users 트리거가 public.users 행을 만들지만, 트리거 버전에 따라
+            # 일부 필드(기수 등)가 누락될 수 있어 프로필을 여기서 직접 확정한다.
+            profile = {
+                "name": row["name"],
+                "student_id": sid,
+                "major": row["major"] or "미입력",
+                "generation": row["generation"],
+                "must_change_password": True,
+            }
+            sb.table("users").update(profile).eq("id", user_id).execute()
             created += 1
             created_names.append(row["name"])
         except Exception as exc:
