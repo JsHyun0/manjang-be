@@ -7,6 +7,7 @@ from app.routers.reservations import router as reservations_router
 from app.routers.debates import router as debates_router
 from app.routers.members import router as members_router
 from app.routers.account import router as account_router
+from app.routers.tournaments import router as tournaments_router
 
 from dotenv import load_dotenv
 
@@ -34,3 +35,4 @@ app.include_router(reservations_router, prefix="/reservations", tags=["reservati
 app.include_router(debates_router, prefix="/debates", tags=["debates"])
 app.include_router(members_router, prefix="/members", tags=["members"])
 app.include_router(account_router, prefix="/auth", tags=["auth"])
+app.include_router(tournaments_router, prefix="/tournaments", tags=["tournaments"])

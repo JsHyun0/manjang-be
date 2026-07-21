@@ -128,6 +128,87 @@ class PasswordChangeRequest(BaseModel):
 
 
 # -----------------------------
+# Event tournaments
+# -----------------------------
+TournamentStatus = Literal["draft", "open", "ongoing", "completed"]
+TournamentStage = Literal["group", "final"]
+
+
+class TournamentBase(BaseModel):
+    title: str
+    topic: str = ""
+    description: str = ""
+    debate_format: str = "자유토론"
+    starts_on: date
+    ends_on: date
+    venue: str = ""
+    status: TournamentStatus = "draft"
+    points_per_win: int = Field(default=1, ge=1, le=10)
+
+
+class TournamentCreate(TournamentBase):
+    pass
+
+
+class TournamentUpdate(BaseModel):
+    title: Optional[str] = None
+    topic: Optional[str] = None
+    description: Optional[str] = None
+    debate_format: Optional[str] = None
+    starts_on: Optional[date] = None
+    ends_on: Optional[date] = None
+    venue: Optional[str] = None
+    status: Optional[TournamentStatus] = None
+    points_per_win: Optional[int] = Field(default=None, ge=1, le=10)
+
+
+class TournamentSummary(TournamentBase):
+    id: str
+    team_count: int = 0
+    match_count: int = 0
+    completed_match_count: int = 0
+
+
+class TournamentTeamMemberInput(BaseModel):
+    user_id: str
+    experience_score: int = Field(default=1, ge=1, le=3)
+
+
+class TournamentTeamInput(BaseModel):
+    client_key: str
+    name: str
+    group_name: str
+    members: List[TournamentTeamMemberInput] = Field(default_factory=list)
+
+
+class TournamentMatchInput(BaseModel):
+    stage: TournamentStage = "group"
+    round_label: str = ""
+    starts_at: datetime
+    venue: str = ""
+    team_a_key: Optional[str] = None
+    team_b_key: Optional[str] = None
+    team_a_source_group: Optional[str] = None
+    team_b_source_group: Optional[str] = None
+    winner_team_key: Optional[str] = None
+    team_a_score: Optional[float] = None
+    team_b_score: Optional[float] = None
+    status: Literal["scheduled", "completed"] = "scheduled"
+    notes: str = ""
+
+
+class TournamentSetup(BaseModel):
+    teams: List[TournamentTeamInput] = Field(default_factory=list)
+    matches: List[TournamentMatchInput] = Field(default_factory=list)
+
+
+class TournamentMatchResult(BaseModel):
+    team_a_score: float = Field(ge=0)
+    team_b_score: float = Field(ge=0)
+    winner_team_id: Optional[str] = None
+
+
+# -----------------------------
 # Legacy Records (for /records router compatibility)
 # -----------------------------
 class DebateRecordBase(BaseModel):
@@ -147,4 +228,3 @@ class DebateRecordCreate(DebateRecordBase):
 
 class DebateRecord(DebateRecordBase):
     id: str
-
