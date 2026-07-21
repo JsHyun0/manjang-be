@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,7 @@ from app.models import (
 )
 
 router = APIRouter()
+KOREA_TIMEZONE = timezone(timedelta(hours=9))
 
 
 def _clean_required(value: str, label: str) -> str:
@@ -21,6 +23,17 @@ def _clean_required(value: str, label: str) -> str:
     if not clean:
         raise HTTPException(status_code=400, detail=f"{label}을(를) 입력해주세요.")
     return clean
+
+
+def _utc_iso(value: datetime) -> str:
+    """Store tournament wall-clock times as timezone-aware UTC values.
+
+    Older clients sent timezone-naive datetime-local values. Tournament times
+    are defined in Korea, so interpret those values as KST instead of letting
+    Postgres assume UTC.
+    """
+    aware = value if value.tzinfo is not None else value.replace(tzinfo=KOREA_TIMEZONE)
+    return aware.astimezone(timezone.utc).isoformat()
 
 
 def _team_experience(team: dict) -> float:
@@ -320,7 +333,7 @@ def replace_tournament_setup(event_id: str, payload: TournamentSetup, _: str = D
                 "stage": match.stage,
                 "group_name": group_by_key.get(match.team_a_key or "") if match.stage == "group" else None,
                 "round_label": match.round_label.strip(),
-                "starts_at": match.starts_at.isoformat(),
+                "starts_at": _utc_iso(match.starts_at),
                 "venue": match.venue.strip(),
                 "team_a_id": team_a_id,
                 "team_b_id": team_b_id,
