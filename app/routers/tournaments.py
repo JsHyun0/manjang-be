@@ -216,10 +216,11 @@ def create_tournament(payload: TournamentCreate, admin_id: str = Depends(require
     data["title"] = _clean_required(payload.title, "대회명")
     data["created_by"] = admin_id
     sb = get_supabase()
-    resp = sb.table("tournaments").insert(data).select("*").single().execute()
-    if not resp.data:
+    resp = sb.table("tournaments").insert(data).execute()
+    created = (resp.data or [None])[0]
+    if not created:
         raise HTTPException(status_code=500, detail="대회를 만들지 못했습니다.")
-    return _event_snapshot(resp.data["id"])
+    return _event_snapshot(created["id"])
 
 
 @router.get("/{event_id}")
@@ -289,7 +290,7 @@ def replace_tournament_setup(event_id: str, payload: TournamentSetup, _: str = D
         for index, team in enumerate(payload.teams)
     ]
     if team_payloads:
-        inserted = sb.table("tournament_teams").insert(team_payloads).select("*").execute()
+        inserted = sb.table("tournament_teams").insert(team_payloads).execute()
         team_id_by_key = {row["client_key"]: row["id"] for row in inserted.data or []}
 
     member_payloads = []
