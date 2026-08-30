@@ -44,7 +44,7 @@ MEMBER_EMAIL_DOMAIN: str = get_env("MEMBER_EMAIL_DOMAIN", "member.manjang.site")
 def get_allowed_origins() -> List[str]:
     raw = get_env("ALLOWED_ORIGINS")
     default_prod = [
-        "https://www.manjang.site",
+        "https://www.manzzang.com",
         "https://manjang.vercel.app",
         "https://manjang-vue.vercel.app",
     ]

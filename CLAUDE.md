@@ -47,7 +47,7 @@ SUPABASE_JWT_SECRET
 ALLOWED_ORIGINS          # JSON array or CSV; dev + prod origins always appended
 SUPABASE_CLIENT_TTL_SECONDS=300  # optional
 MEMBER_SHEET_URL         # 멤버 명단 구글시트 URL (동기화 기본 소스)
-MEMBER_EMAIL_DOMAIN      # 사전 등록 회원 가상 이메일 도메인 (default: member.manjang.site)
+MEMBER_EMAIL_DOMAIN      # 사전 등록 회원 가상 이메일 도메인 (default: member.manzzang.com)
 ```
 
 ## Deployment
